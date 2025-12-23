@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品注文</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style>
+.pydantic-htmx-form {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form-field {
+  margin-bottom: 15px;
+}
+
+.form-field label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.form-field input[type="checkbox"] {
+  width: auto;
+}
+
+.form-field .required {
+  color: red;
+}
+
+.form-field .field-description {
+  display: block;
+  color: #666;
+  font-size: 0.9em;
+  margin-top: 3px;
+}
+
+.error-message {
+  min-height: 20px;
+  margin-top: 3px;
+}
+
+.error-message .error {
+  color: #d32f2f;
+  font-size: 0.9em;
+}
+
+.error-message .valid {
+  color: #388e3c;
+}
+
+.form-actions {
+  margin-top: 20px;
+}
+
+.form-actions button {
+  background-color: #1976d2;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.form-actions button:hover {
+  background-color: #1565c0;
+}
+
+.errors {
+  background-color: #ffebee;
+  border: 1px solid #f44336;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+
+.errors ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #c62828;
+}
+
+.success {
+  background-color: #e8f5e9;
+  border: 1px solid #4caf50;
+  border-radius: 4px;
+  padding: 10px;
+  color: #2e7d32;
+}
+</style>
+</head>
+<body>
+  <h1>商品注文</h1>
+  <form id="productorder-form" hx-post="/api/order" hx-target="#response" hx-swap="innerHTML" class="pydantic-htmx-form">
+  <div class="form-field" id="field-product_name">
+    <label for="product_name">商品名 <span class='required'>*</span></label>
+    <input type="text" id="product_name" name="product_name" required minlength="1"
+           hx-post="/api/validate/order/product_name" hx-trigger="blur" hx-target="#product_name-error" hx-swap="innerHTML">
+
+    <div class="error-message" id="product_name-error"></div>
+  </div>
+  <div class="form-field" id="field-quantity">
+    <label for="quantity">数量 <span class='required'>*</span></label>
+    <input type="number" id="quantity" name="quantity" required min="1" max="100"
+           hx-post="/api/validate/order/quantity" hx-trigger="blur" hx-target="#quantity-error" hx-swap="innerHTML">
+    <small class="field-description">1〜100個まで注文できます</small>
+    <div class="error-message" id="quantity-error"></div>
+  </div>
+  <div class="form-field" id="field-size">
+    <label for="size">サイズ <span class='required'>*</span></label>
+    <select id="size" name="size" required
+            hx-post="/api/validate/order/size" hx-trigger="change" hx-target="#size-error" hx-swap="innerHTML">
+      <option value="S">Sサイズ</option>
+      <option value="M">Mサイズ</option>
+      <option value="L">Lサイズ</option>
+      <option value="XL">XLサイズ</option>
+    </select>
+
+    <div class="error-message" id="size-error"></div>
+  </div>
+  <div class="form-field" id="field-color">
+    <label for="color">色 <span class='required'>*</span></label>
+    <select id="color" name="color" required
+            hx-post="/api/validate/order/color" hx-trigger="change" hx-target="#color-error" hx-swap="innerHTML">
+      <option value="red">red</option>
+      <option value="blue">blue</option>
+      <option value="green">green</option>
+      <option value="black">black</option>
+      <option value="white">white</option>
+    </select>
+    <small class="field-description">お好みの色を選択してください</small>
+    <div class="error-message" id="color-error"></div>
+  </div>
+  <div class="form-field" id="field-price">
+    <label for="price">価格 <span class='required'>*</span></label>
+    <input type="number" id="price" name="price" required min="0" step="any"
+           hx-post="/api/validate/order/price" hx-trigger="blur" hx-target="#price-error" hx-swap="innerHTML">
+    <small class="field-description">税込価格</small>
+    <div class="error-message" id="price-error"></div>
+  </div>
+  <div class="form-field" id="field-gift_wrap">
+    <label for="gift_wrap">ギフトラッピング</label>
+    <input type="checkbox" id="gift_wrap" name="gift_wrap" 
+           hx-post="/api/validate/order/gift_wrap" hx-trigger="change" hx-target="#gift_wrap-error" hx-swap="innerHTML">
+    <small class="field-description">ギフト用にラッピングしますか？</small>
+    <div class="error-message" id="gift_wrap-error"></div>
+  </div>
+  <div class="form-field" id="field-delivery_date">
+    <label for="delivery_date">配達希望日</label>
+    <input type="date" id="delivery_date" name="delivery_date" 
+           hx-post="/api/validate/order/delivery_date" hx-trigger="blur" hx-target="#delivery_date-error" hx-swap="innerHTML">
+    <small class="field-description">希望する配達日を選択してください（任意）</small>
+    <div class="error-message" id="delivery_date-error"></div>
+  </div>
+  <div class="form-actions">
+    <button type="submit">注文する</button>
+  </div>
+</form>
+  <div id="response"></div>
+</body>
+</html>
