@@ -179,14 +179,78 @@ else:
             print(f"{field_name}: {result.error_message}")
 ```
 
+## POSTリクエストからPydanticモデルへの変換
+
+HTMXフォームから送信されたPOSTデータを直接Pydanticモデルに変換できます。
+
+### parse_form_data を使用
+
+```python
+from pydantic_htmx import parse_form_data
+
+# フォームから送信されたデータ（文字列の辞書）
+form_data = {
+    "username": "john_doe",
+    "age": "25",           # 文字列として送信される
+    "birth_date": "1998-05-15",  # ISO形式の日付
+    "agree_terms": "on",   # チェックボックスがONの場合
+}
+
+# Pydanticモデルに変換（型は自動変換される）
+user = parse_form_data(UserForm, form_data)
+
+print(user.username)    # "john_doe"
+print(user.age)         # 25 (int型)
+print(user.birth_date)  # date(1998, 5, 15)
+print(user.agree_terms) # True (bool型)
+```
+
+### parse_form_data_safe を使用（エラーハンドリング）
+
+```python
+from pydantic_htmx import parse_form_data_safe
+
+form_data = {
+    "username": "ab",       # 短すぎる
+    "age": "15",            # 18未満
+    "birth_date": "invalid",
+}
+
+user, errors = parse_form_data_safe(UserForm, form_data)
+
+if user:
+    print(f"成功: {user}")
+else:
+    print("バリデーションエラー:")
+    for field_name, error_msg in errors.items():
+        print(f"  {field_name}: {error_msg}")
+    # username: この値は短すぎます
+    # age: この値は18以上である必要があります
+    # birth_date: 有効な日付を入力してください
+```
+
+### チェックボックスの処理
+
+チェックボックスは未チェック時にフォームデータとして送信されません。
+`parse_form_data` はこれを自動的に `False` として処理します。
+
+```python
+# チェックボックスがチェックされていない場合
+form_data = {"name": "John"}  # is_admin は送信されない
+
+user = parse_form_data(UserForm, form_data)
+print(user.is_admin)  # False
+```
+
 ## サーバー統合例
 
 ### FastAPIとの統合
 
 ```python
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse
-from pydantic_htmx import FormGenerator
+from pydantic import BaseModel, Field
+from pydantic_htmx import FormGenerator, parse_form_data_safe
 
 app = FastAPI()
 
@@ -205,29 +269,33 @@ async def index():
     )
 
 @app.post("/validate/{field_name}", response_class=HTMLResponse)
-async def validate_field(field_name: str, value: str = Form(None)):
+async def validate_field(field_name: str, request: Request):
+    form_data = await request.form()
+    value = form_data.get(field_name)
     validator = generator.get_validator()
     result = validator.validate_field(field_name, value)
     return result.to_html()
 
 @app.post("/submit", response_class=HTMLResponse)
-async def submit(
-    name: str = Form(...),
-    email: str = Form(...),
-    message: str = Form(...)
-):
-    validator = generator.get_validator()
-    model, results = validator.validate_and_parse({
-        "name": name,
-        "email": email,
-        "message": message
-    })
+async def submit(request: Request):
+    # フォームデータを取得
+    form_data = await request.form()
+    form_dict = dict(form_data)
+    
+    # parse_form_data_safe でPydanticモデルに変換
+    model, errors = parse_form_data_safe(ContactForm, form_dict)
     
     if model:
-        # 処理成功
+        # バリデーション成功 - modelはContactFormのインスタンス
+        print(f"受信: {model.name}, {model.email}")
         return '<div class="success">送信しました！</div>'
     else:
-        return validator.generate_error_response(results)
+        # バリデーション失敗
+        error_html = "<ul>"
+        for field_name, error_msg in errors.items():
+            error_html += f"<li>{field_name}: {error_msg}</li>"
+        error_html += "</ul>"
+        return f'<div class="errors">{error_html}</div>'
 ```
 
 ## 完全なHTMLドキュメント生成

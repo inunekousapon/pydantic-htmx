@@ -265,5 +265,126 @@ class TestHTMLOutput:
         assert "&amp;" in html
 
 
+class TestFormDataParser:
+    """FormDataParserのテスト"""
+
+    def test_parse_string_to_int(self):
+        """文字列から整数への変換"""
+        from pydantic_htmx import parse_form_data
+
+        form_data = {"name": "John", "age": "25"}
+        model = parse_form_data(SimpleModel, form_data)
+
+        assert model.name == "John"
+        assert model.age == 25
+        assert isinstance(model.age, int)
+
+    def test_parse_full_model(self):
+        """全フィールドタイプのパース"""
+        from pydantic_htmx import parse_form_data
+
+        form_data = {
+            "username": "john_doe",
+            "age": "25",
+            "score": "85.5",
+            "birth_date": "1990-01-15",
+            "status": "active",
+            "is_admin": "on",
+        }
+        model = parse_form_data(FullModel, form_data)
+
+        assert model.username == "john_doe"
+        assert model.age == 25
+        assert model.score == 85.5
+        assert model.birth_date == date(1990, 1, 15)
+        assert model.status == "active"
+        assert model.is_admin is True
+
+    def test_parse_checkbox_unchecked(self):
+        """チェックボックスが未チェックの場合"""
+        from pydantic_htmx import parse_form_data
+
+        form_data = {
+            "username": "john_doe",
+            "age": "25",
+            "score": "85.5",
+            "birth_date": "1990-01-15",
+            "status": "active",
+            # is_admin は送信されない（チェックされていない）
+        }
+        model = parse_form_data(FullModel, form_data)
+
+        assert model.is_admin is False
+
+    def test_parse_checkbox_values(self):
+        """チェックボックスの様々な値"""
+        from pydantic_htmx import FormDataParser
+
+        class CheckboxModel(BaseModel):
+            checked: bool = False
+
+        parser = FormDataParser(CheckboxModel)
+
+        # "on" は True
+        model = parser.parse({"checked": "on"})
+        assert model.checked is True
+
+        # "true" は True
+        model = parser.parse({"checked": "true"})
+        assert model.checked is True
+
+        # "1" は True
+        model = parser.parse({"checked": "1"})
+        assert model.checked is True
+
+        # "false" は False
+        model = parser.parse({"checked": "false"})
+        assert model.checked is False
+
+    def test_parse_safe_success(self):
+        """parse_safeの成功ケース"""
+        from pydantic_htmx import parse_form_data_safe
+
+        form_data = {"name": "John", "age": "25"}
+        model, errors = parse_form_data_safe(SimpleModel, form_data)
+
+        assert model is not None
+        assert model.name == "John"
+        assert model.age == 25
+        assert errors == {}
+
+    def test_parse_safe_validation_error(self):
+        """parse_safeのバリデーションエラー"""
+        from pydantic_htmx import parse_form_data_safe
+
+        form_data = {"name": "", "age": "-5"}
+        model, errors = parse_form_data_safe(SimpleModel, form_data)
+
+        assert model is None
+        assert "name" in errors
+        assert "age" in errors
+
+    def test_parse_optional_field(self):
+        """オプショナルフィールドのパース"""
+        from pydantic_htmx import parse_form_data
+
+        class OptionalModel(BaseModel):
+            name: str
+            nickname: str | None = None
+
+        # ニックネームが空の場合
+        form_data = {"name": "John", "nickname": ""}
+        model = parse_form_data(OptionalModel, form_data)
+
+        assert model.name == "John"
+        assert model.nickname is None
+
+        # ニックネームが存在する場合
+        form_data = {"name": "John", "nickname": "Johnny"}
+        model = parse_form_data(OptionalModel, form_data)
+
+        assert model.nickname == "Johnny"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

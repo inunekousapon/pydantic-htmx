@@ -7,7 +7,12 @@ from typing import Literal, Annotated
 
 from pydantic import BaseModel, Field
 
-from pydantic_htmx import FormGenerator, SelectOption
+from pydantic_htmx import (
+    FormGenerator,
+    SelectOption,
+    parse_form_data,
+    parse_form_data_safe,
+)
 from pydantic_htmx.field_types import Select
 
 
@@ -164,6 +169,62 @@ def main():
         if field.options:
             print(f"  Options: {[(o.value, o.label) for o in field.options]}")
         print()
+
+    # POSTリクエストからPydanticモデルへの変換デモ
+    print("=" * 60)
+    print("フォームデータのパース（POSTリクエスト処理）")
+    print("=" * 60)
+
+    # 模擬的なフォームデータ（実際のWebフレームワークでは request.form 等から取得）
+    form_data = {
+        "username": "john_doe",
+        "email": "john@example.com",
+        "age": "25",  # 文字列で送信される
+        "gender": "male",
+        "birth_date": "1998-05-15",  # ISO形式の日付文字列
+        "agree_terms": "on",  # チェックボックスがチェックされた場合
+    }
+
+    print(f"フォームデータ: {form_data}")
+    print()
+
+    # 方法1: parse_form_data を使用（例外がスローされる可能性あり）
+    try:
+        user = parse_form_data(UserRegistration, form_data)
+        print("parse_form_data 成功:")
+        print(f"  username: {user.username} (type: {type(user.username).__name__})")
+        print(f"  email: {user.email}")
+        print(f"  age: {user.age} (type: {type(user.age).__name__})")
+        print(f"  gender: {user.gender}")
+        print(
+            f"  birth_date: {user.birth_date} (type: {type(user.birth_date).__name__})"
+        )
+        print(
+            f"  agree_terms: {user.agree_terms} (type: {type(user.agree_terms).__name__})"
+        )
+    except Exception as e:
+        print(f"エラー: {e}")
+    print()
+
+    # 方法2: parse_form_data_safe を使用（エラーを辞書で返す）
+    print("parse_form_data_safe でバリデーションエラーを確認:")
+    invalid_form_data = {
+        "username": "ab",  # 短すぎる
+        "email": "invalid-email",  # 不正な形式
+        "age": "15",  # 18未満
+        "gender": "male",
+        "birth_date": "1998-05-15",
+        # agree_terms は送信されない（チェックされていない）
+    }
+    print(f"フォームデータ: {invalid_form_data}")
+
+    user, errors = parse_form_data_safe(UserRegistration, invalid_form_data)
+    if user:
+        print(f"成功: {user}")
+    else:
+        print("バリデーションエラー:")
+        for field_name, error_msg in errors.items():
+            print(f"  {field_name}: {error_msg}")
 
 
 if __name__ == "__main__":
