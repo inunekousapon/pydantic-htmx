@@ -17,9 +17,11 @@ class ValidationResult:
     def to_html(self) -> str:
         """HTML形式でエラーメッセージを返す"""
         if self.is_valid:
-            return '<span class="valid">✓</span>'
+            return ""
+        if not self.error_message:
+            return ""
         return (
-            f'<span class="error">{self._escape_html(self.error_message or "")}</span>'
+            f'<span class="error">{self._escape_html(self.error_message)}</span>'
         )
 
     @staticmethod
