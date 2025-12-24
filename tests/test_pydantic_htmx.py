@@ -247,8 +247,11 @@ class TestHTMLOutput:
         generator = FormGenerator(SimpleModel, validate_endpoint="/custom/validate")
         html = generator.generate_form()
 
-        assert 'hx-post="/custom/validate/name"' in html
-        assert 'hx-post="/custom/validate/age"' in html
+        # エンドポイントはフィールド名で変わらない
+        assert 'hx-post="/custom/validate"' in html
+        # フィールド名はhx-valsで送信される
+        assert 'hx-vals=\'{"_field": "name"}\'' in html
+        assert 'hx-vals=\'{"_field": "age"}\'' in html
 
     def test_html_escaping(self):
         """HTMLエスケープの確認"""

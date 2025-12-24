@@ -26,19 +26,24 @@ class HTMLTemplates:
 
     # 入力タイプ別テンプレート
     TEXT_INPUT = """    <input type="text" id="{name}" name="{name}" {attrs}
-           hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML">"""
+           hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML"
+           hx-vals='{{"_field": "{name}"}}'>"""
 
     NUMBER_INPUT = """    <input type="number" id="{name}" name="{name}" {attrs}
-           hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML">"""
+           hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML"
+           hx-vals='{{"_field": "{name}"}}'>"""
 
     DATE_INPUT = """    <input type="date" id="{name}" name="{name}" {attrs}
-           hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML">"""
+           hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML"
+           hx-vals='{{"_field": "{name}"}}'>"""
 
     CHECKBOX_INPUT = """    <input type="checkbox" id="{name}" name="{name}" {attrs}
-           hx-post="{validate_url}" hx-trigger="change" hx-target="#{name}-error" hx-swap="innerHTML">"""
+           hx-post="{validate_url}" hx-trigger="change" hx-target="#{name}-error" hx-swap="innerHTML"
+           hx-vals='{{"_field": "{name}"}}'>"""
 
     SELECT_INPUT = """    <select id="{name}" name="{name}" {attrs}
-            hx-post="{validate_url}" hx-trigger="change" hx-target="#{name}-error" hx-swap="innerHTML">
+            hx-post="{validate_url}" hx-trigger="change" hx-target="#{name}-error" hx-swap="innerHTML"
+            hx-vals='{{"_field": "{name}"}}'>
 {options}
     </select>"""
 
@@ -96,7 +101,7 @@ class TemplateRenderer:
 
     def _render_input(self, field: ParsedField) -> str:
         """入力要素をレンダリング"""
-        validate_url = f"{self.validate_endpoint}/{field.name}"
+        validate_url = self.validate_endpoint
         attrs = self._build_attrs(field)
 
         if field.field_type == FieldType.SELECT:
