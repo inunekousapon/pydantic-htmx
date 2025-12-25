@@ -3,8 +3,8 @@ HTMXバリデーション機能
 Pydanticのバリデーションと連動したHTMXレスポンスを生成
 """
 
-from typing import Any
-from pydantic import BaseModel, ValidationError
+from typing import Any, Annotated, get_origin, get_args
+from pydantic import BaseModel, ValidationError, TypeAdapter
 
 
 class ValidationResult:
@@ -41,6 +41,19 @@ class HTMXValidator:
 
     def __init__(self, model: type[BaseModel]):
         self.model = model
+        self._field_adapters: dict[str, TypeAdapter] = {}
+        self._build_field_adapters()
+
+    def _build_field_adapters(self) -> None:
+        """各フィールドのTypeAdapterを構築"""
+        for field_name, field_info in self.model.model_fields.items():
+            annotation = field_info.annotation
+            
+            # メタデータ付きのAnnotated型を構築
+            if field_info.metadata:
+                annotation = Annotated[(annotation, *field_info.metadata)]
+            
+            self._field_adapters[field_name] = TypeAdapter(annotation)
 
     def validate_field(self, field_name: str, data: dict[str, Any]) -> ValidationResult:
         """単一フィールドのバリデーション
@@ -65,42 +78,26 @@ class HTMXValidator:
         if not field_info.is_required() and (value is None or value == ""):
             return ValidationResult(True)
 
-        # フォーム全体のデータでバリデーションを実行
+        # TypeAdapterを使用して個別フィールドをバリデート
         try:
-            self.model.model_validate(data)
+            adapter = self._field_adapters[field_name]
+            adapter.validate_python(value)
             return ValidationResult(True)
 
         except ValidationError as e:
-            # 対象フィールドのエラーのみ抽出
-            for error in e.errors():
-                if error["loc"] and error["loc"][0] == field_name:
-                    return ValidationResult(False, self._translate_error(error))
-
-            return ValidationResult(True)
+            # 最初のエラーを返す
+            errors = e.errors()
+            if errors:
+                return ValidationResult(False, self._translate_error(errors[0]))
+            return ValidationResult(False, "入力エラーです")
 
     def validate_all(self, data: dict[str, Any]) -> dict[str, ValidationResult]:
         """全フィールドのバリデーション"""
         results: dict[str, ValidationResult] = {}
 
-        try:
-            self.model.model_validate(data)
-            # すべて成功
-            for field_name in self.model.model_fields:
-                results[field_name] = ValidationResult(True)
-
-        except ValidationError as e:
-            # 成功したフィールドを初期化
-            for field_name in self.model.model_fields:
-                results[field_name] = ValidationResult(True)
-
-            # エラーがあるフィールドを更新
-            for error in e.errors():
-                if error["loc"]:
-                    field_name = str(error["loc"][0])
-                    if field_name in results:
-                        results[field_name] = ValidationResult(
-                            False, self._translate_error(error)
-                        )
+        # 各フィールドを個別にバリデート
+        for field_name in self.model.model_fields:
+            results[field_name] = self.validate_field(field_name, data)
 
         return results
 
