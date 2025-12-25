@@ -201,6 +201,10 @@ class TemplateRenderer:
         if field.field_type == FieldType.FLOAT:
             attrs.append('step="any"')
 
+        # プレースホルダー
+        if field.placeholder is not None:
+            attrs.append(f'placeholder="{self._escape_html(field.placeholder)}"')
+
         return " ".join(attrs)
 
     @staticmethod

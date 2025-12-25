@@ -42,6 +42,7 @@ class ParsedField:
         lt: float | None = None,
         pattern: str | None = None,
         options: list[SelectOption] | None = None,
+        placeholder: str | None = None,
     ):
         self.name = name
         self.field_type = field_type
@@ -57,6 +58,7 @@ class ParsedField:
         self.lt = lt
         self.pattern = pattern
         self.options = options or []
+        self.placeholder = placeholder
 
 
 class ModelParser:
@@ -86,6 +88,9 @@ class ModelParser:
         # 選択肢の抽出
         options = cls._extract_options(annotation, field_info)
 
+        # プレースホルダーの抽出
+        placeholder = cls._extract_placeholder(field_info)
+
         return ParsedField(
             name=name,
             field_type=field_type,
@@ -94,6 +99,7 @@ class ModelParser:
             description=field_info.description,
             default=field_info.default if not field_info.is_required() else None,
             options=options,
+            placeholder=placeholder,
             **constraints,
         )
 
@@ -196,3 +202,12 @@ class ModelParser:
                 options.append(SelectOption(str(arg), str(arg)))
 
         return options
+
+    @classmethod
+    def _extract_placeholder(cls, field_info: FieldInfo) -> str | None:
+        """プレースホルダーを抽出"""
+        # json_schema_extraからプレースホルダーを取得
+        if field_info.json_schema_extra:
+            if isinstance(field_info.json_schema_extra, dict):
+                return field_info.json_schema_extra.get("placeholder")
+        return None
