@@ -42,12 +42,20 @@ class HTMXValidator:
     def __init__(self, model: type[BaseModel]):
         self.model = model
 
-    def validate_field(self, field_name: str, value: Any) -> ValidationResult:
-        """単一フィールドのバリデーション"""
+    def validate_field(self, field_name: str, data: dict[str, Any]) -> ValidationResult:
+        """単一フィールドのバリデーション
+        
+        フォーム全体のデータを受け取り、対象フィールドのエラーのみを返す
+        
+        Args:
+            field_name: バリデーション対象のフィールド名
+            data: フォーム全体のデータ
+        """
         if field_name not in self.model.model_fields:
             return ValidationResult(False, f"不明なフィールド: {field_name}")
 
         field_info = self.model.model_fields[field_name]
+        value = data.get(field_name)
 
         # 必須チェック
         if field_info.is_required() and (value is None or value == ""):
@@ -57,17 +65,9 @@ class HTMXValidator:
         if not field_info.is_required() and (value is None or value == ""):
             return ValidationResult(True)
 
-        # 型変換と検証のために部分的なモデルを作成
+        # フォーム全体のデータでバリデーションを実行
         try:
-            # 部分的なバリデーションを行う
-            partial_data = {field_name: value}
-
-            # 他の必須フィールドにダミー値を設定
-            for name, info in self.model.model_fields.items():
-                if name != field_name and info.is_required():
-                    partial_data[name] = self._get_dummy_value(info)
-
-            self.model.model_validate(partial_data)
+            self.model.model_validate(data)
             return ValidationResult(True)
 
         except ValidationError as e:
@@ -131,25 +131,6 @@ class HTMXValidator:
             return '<div class="success">入力内容に問題はありません</div>'
 
         return f'<div class="errors"><ul>{"".join(errors)}</ul></div>'
-
-    def _get_dummy_value(self, field_info: Any) -> Any:
-        """ダミー値を生成"""
-        from datetime import date
-
-        annotation = field_info.annotation
-
-        if annotation is str:
-            return "dummy"
-        if annotation is int:
-            return 0
-        if annotation is float:
-            return 0.0
-        if annotation is bool:
-            return False
-        if annotation is date:
-            return date.today()
-
-        return "dummy"
 
     def _translate_error(self, error: dict[str, Any]) -> str:
         """Pydanticのエラーメッセージを日本語に翻訳"""

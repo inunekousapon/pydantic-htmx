@@ -27,23 +27,23 @@ class HTMLTemplates:
     # 入力タイプ別テンプレート
     TEXT_INPUT = """    <input type="text" id="{name}" name="{name}" {attrs}
            hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML"
-           hx-vals='{{"_field": "{name}"}}'>"""
+           hx-include="closest form" hx-vals='{{"_field": "{name}"}}'>"""
 
     NUMBER_INPUT = """    <input type="number" id="{name}" name="{name}" {attrs}
            hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML"
-           hx-vals='{{"_field": "{name}"}}'>"""
+           hx-include="closest form" hx-vals='{{"_field": "{name}"}}'>"""
 
     DATE_INPUT = """    <input type="date" id="{name}" name="{name}" {attrs}
            hx-post="{validate_url}" hx-trigger="blur" hx-target="#{name}-error" hx-swap="innerHTML"
-           hx-vals='{{"_field": "{name}"}}'>"""
+           hx-include="closest form" hx-vals='{{"_field": "{name}"}}'>"""
 
     CHECKBOX_INPUT = """    <input type="checkbox" id="{name}" name="{name}" {attrs}
            hx-post="{validate_url}" hx-trigger="change" hx-target="#{name}-error" hx-swap="innerHTML"
-           hx-vals='{{"_field": "{name}"}}'>"""
+           hx-include="closest form" hx-vals='{{"_field": "{name}"}}'>"""
 
     SELECT_INPUT = """    <select id="{name}" name="{name}" {attrs}
             hx-post="{validate_url}" hx-trigger="change" hx-target="#{name}-error" hx-swap="innerHTML"
-            hx-vals='{{"_field": "{name}"}}'>
+            hx-include="closest form" hx-vals='{{"_field": "{name}"}}'>
 {options}
     </select>"""
 
