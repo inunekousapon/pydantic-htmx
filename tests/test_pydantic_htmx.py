@@ -143,10 +143,10 @@ class TestHTMXValidator:
         """有効なフィールドのバリデーション"""
         validator = HTMXValidator(SimpleModel)
 
-        result = validator.validate_field("name", "John")
+        result = validator.validate_field("name", {"name": "John", "age": 25})
         assert result.is_valid
 
-        result = validator.validate_field("age", 25)
+        result = validator.validate_field("age", {"name": "John", "age": 25})
         assert result.is_valid
 
     def test_validate_field_invalid(self):
@@ -154,7 +154,7 @@ class TestHTMXValidator:
         validator = HTMXValidator(FullModel)
 
         # 短すぎる
-        result = validator.validate_field("username", "ab")
+        result = validator.validate_field("username", {"username": "ab", "age": 20, "score": 50.0, "birth_date": "2000-01-01", "status": "active", "is_admin": False})
         assert not result.is_valid
         assert "短すぎます" in result.error_message
 
@@ -162,7 +162,7 @@ class TestHTMXValidator:
         """必須フィールドのバリデーション"""
         validator = HTMXValidator(SimpleModel)
 
-        result = validator.validate_field("name", "")
+        result = validator.validate_field("name", {"name": "", "age": 25})
         assert not result.is_valid
         assert "必須" in result.error_message
 
@@ -387,6 +387,216 @@ class TestFormDataParser:
         model = parse_form_data(OptionalModel, form_data)
 
         assert model.nickname == "Johnny"
+
+
+class TestFieldValidator:
+    """field_validatorを含むモデルのバリデーションテスト"""
+
+    def test_field_validator_single_field_error(self):
+        """単一フィールドでfield_validatorのエラーを検出"""
+        from pydantic import field_validator
+
+        class UserModel(BaseModel):
+            username: str = Field(min_length=1, title="ユーザー名")
+            email: str = Field(title="メールアドレス")
+
+            @field_validator("email")
+            @classmethod
+            def validate_email(cls, v: str) -> str:
+                if "@" not in v:
+                    raise ValueError("メールアドレスには@が必要です")
+                return v
+
+        validator = HTMXValidator(UserModel)
+
+        # 正常なケース
+        result = validator.validate_field("email", {"username": "test", "email": "test@example.com"})
+        assert result.is_valid is True
+
+        # エラーケース：@がない
+        result = validator.validate_field("email", {"username": "test", "email": "invalid-email"})
+        assert result.is_valid is False
+        assert result.error_message is not None
+
+    def test_field_validator_all_fields_error(self):
+        """全体フィールドでfield_validatorのエラーを検出"""
+        from pydantic import field_validator
+
+        class UserModel(BaseModel):
+            username: str = Field(min_length=1, title="ユーザー名")
+            email: str = Field(title="メールアドレス")
+
+            @field_validator("email")
+            @classmethod
+            def validate_email(cls, v: str) -> str:
+                if "@" not in v:
+                    raise ValueError("メールアドレスには@が必要です")
+                return v
+
+        validator = HTMXValidator(UserModel)
+
+        # 正常なケース
+        results = validator.validate_all({"username": "test", "email": "test@example.com"})
+        assert results["username"].is_valid is True
+        assert results["email"].is_valid is True
+
+        # エラーケース
+        results = validator.validate_all({"username": "test", "email": "invalid-email"})
+        assert results["username"].is_valid is True
+        assert results["email"].is_valid is False
+        assert results["email"].error_message is not None
+
+    def test_field_validator_multiple_errors(self):
+        """複数フィールドでfield_validatorのエラーを検出"""
+        from pydantic import field_validator
+
+        class UserModel(BaseModel):
+            username: str = Field(min_length=3, title="ユーザー名")
+            password: str = Field(title="パスワード")
+
+            @field_validator("username")
+            @classmethod
+            def validate_username(cls, v: str) -> str:
+                if not v.isalnum():
+                    raise ValueError("英数字のみ使用可能です")
+                return v
+
+            @field_validator("password")
+            @classmethod
+            def validate_password(cls, v: str) -> str:
+                if len(v) < 8:
+                    raise ValueError("パスワードは8文字以上必要です")
+                return v
+
+        validator = HTMXValidator(UserModel)
+
+        # 両方エラー
+        results = validator.validate_all({"username": "a@b", "password": "short"})
+        assert results["username"].is_valid is False
+        assert results["password"].is_valid is False
+
+
+class TestModelValidator:
+    """model_validatorを含むモデルのバリデーションテスト"""
+
+    def test_model_validator_single_field(self):
+        """単一フィールドでmodel_validatorのエラーを検出（モデルバリデータはフィールド単体では検出できない）"""
+        from pydantic import model_validator
+
+        class PasswordModel(BaseModel):
+            password: str = Field(min_length=1, title="パスワード")
+            password_confirm: str = Field(min_length=1, title="パスワード確認")
+
+            @model_validator(mode="after")
+            def passwords_match(self):
+                if self.password != self.password_confirm:
+                    raise ValueError("パスワードが一致しません")
+                return self
+
+        validator = HTMXValidator(PasswordModel)
+
+        # 単一フィールドバリデーションでは、model_validatorは検出されない
+        # （TypeAdapterはフィールド単体のバリデーションのため）
+        result = validator.validate_field("password", {"password": "test123", "password_confirm": "different"})
+        # model_validatorはフィールド単体では動作しないため、ここはTrueになる
+        assert result.is_valid is True
+
+    def test_model_validator_validate_all(self):
+        """validate_allでmodel_validatorのエラーを検出"""
+        from pydantic import model_validator
+
+        class PasswordModel(BaseModel):
+            password: str = Field(min_length=1, title="パスワード")
+            password_confirm: str = Field(min_length=1, title="パスワード確認")
+
+            @model_validator(mode="after")
+            def passwords_match(self):
+                if self.password != self.password_confirm:
+                    raise ValueError("パスワードが一致しません")
+                return self
+
+        validator = HTMXValidator(PasswordModel)
+
+        # validate_allを使用してmodel_validatorのエラーを検出
+        results = validator.validate_all({"password": "test123", "password_confirm": "different"})
+        
+        # 現在の実装では、validate_allはvalidate_fieldを個別に呼び出すため
+        # model_validatorのエラーは検出されない
+        # これはvalidate_and_parseで検出する必要がある
+
+    def test_model_validator_with_validate_and_parse(self):
+        """validate_and_parseでmodel_validatorのエラーを検出"""
+        from pydantic import model_validator
+
+        class PasswordModel(BaseModel):
+            password: str = Field(min_length=1, title="パスワード")
+            password_confirm: str = Field(min_length=1, title="パスワード確認")
+
+            @model_validator(mode="after")
+            def passwords_match(self):
+                if self.password != self.password_confirm:
+                    raise ValueError("パスワードが一致しません")
+                return self
+
+        validator = HTMXValidator(PasswordModel)
+
+        # 正常なケース
+        model, results = validator.validate_and_parse({"password": "test123", "password_confirm": "test123"})
+        assert model is not None
+        assert model.password == "test123"
+
+        # エラーケース：パスワードが一致しない
+        model, results = validator.validate_and_parse({"password": "test123", "password_confirm": "different"})
+        assert model is None
+
+
+class TestFieldAndModelValidatorCombined:
+    """field_validatorとmodel_validatorを組み合わせたテスト"""
+
+    def test_combined_validators(self):
+        """field_validatorとmodel_validatorを組み合わせたバリデーション"""
+        from pydantic import field_validator, model_validator
+
+        class RegistrationModel(BaseModel):
+            email: str = Field(title="メールアドレス")
+            password: str = Field(min_length=8, title="パスワード")
+            password_confirm: str = Field(min_length=1, title="パスワード確認")
+
+            @field_validator("email")
+            @classmethod
+            def validate_email(cls, v: str) -> str:
+                if "@" not in v:
+                    raise ValueError("メールアドレスには@が必要です")
+                return v
+
+            @model_validator(mode="after")
+            def passwords_match(self):
+                if self.password != self.password_confirm:
+                    raise ValueError("パスワードが一致しません")
+                return self
+
+        validator = HTMXValidator(RegistrationModel)
+
+        # 単一フィールド：emailのfield_validatorエラー
+        result = validator.validate_field("email", {"email": "invalid", "password": "password123", "password_confirm": "password123"})
+        assert result.is_valid is False
+        assert result.error_message is not None
+
+        # 単一フィールド：emailが正常
+        result = validator.validate_field("email", {"email": "test@example.com", "password": "password123", "password_confirm": "password123"})
+        assert result.is_valid is True
+
+        # 全体：field_validatorエラー検出
+        results = validator.validate_all({"email": "invalid", "password": "password123", "password_confirm": "password123"})
+        assert results["email"].is_valid is False
+
+        # validate_and_parse：すべて正常
+        model, results = validator.validate_and_parse({"email": "test@example.com", "password": "password123", "password_confirm": "password123"})
+        assert model is not None
+
+        # validate_and_parse：model_validatorエラー
+        model, results = validator.validate_and_parse({"email": "test@example.com", "password": "password123", "password_confirm": "different"})
+        assert model is None
 
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@ HTMXバリデーション機能
 Pydanticのバリデーションと連動したHTMXレスポンスを生成
 """
 
-from typing import Any, Annotated, get_origin, get_args
-from pydantic import BaseModel, ValidationError, TypeAdapter
+from typing import Any
+from pydantic import BaseModel, ValidationError
 
 
 class ValidationResult:
@@ -41,19 +41,42 @@ class HTMXValidator:
 
     def __init__(self, model: type[BaseModel]):
         self.model = model
-        self._field_adapters: dict[str, TypeAdapter] = {}
-        self._build_field_adapters()
 
-    def _build_field_adapters(self) -> None:
-        """各フィールドのTypeAdapterを構築"""
-        for field_name, field_info in self.model.model_fields.items():
-            annotation = field_info.annotation
-            
-            # メタデータ付きのAnnotated型を構築
-            if field_info.metadata:
-                annotation = Annotated[(annotation, *field_info.metadata)]
-            
-            self._field_adapters[field_name] = TypeAdapter(annotation)
+    def _get_dummy_value(self, field_info: Any) -> Any:
+        """ダミー値を生成（必須フィールド用）"""
+        from datetime import date
+        from typing import get_origin, get_args, Literal, Union
+        from types import UnionType
+
+        annotation = field_info.annotation
+
+        # Union型（T | None など）の場合
+        origin = get_origin(annotation)
+        if origin is Union or isinstance(annotation, UnionType):
+            args = get_args(annotation)
+            non_none_args = [a for a in args if a is not type(None)]
+            if non_none_args:
+                annotation = non_none_args[0]
+                origin = get_origin(annotation)
+
+        # Literal型の場合、最初の値を返す
+        if origin is Literal:
+            args = get_args(annotation)
+            if args:
+                return args[0]
+
+        if annotation is str:
+            return "dummy"
+        if annotation is int:
+            return 0
+        if annotation is float:
+            return 0.0
+        if annotation is bool:
+            return False
+        if annotation is date:
+            return date.today()
+
+        return "dummy"
 
     def validate_field(self, field_name: str, data: dict[str, Any]) -> ValidationResult:
         """単一フィールドのバリデーション
@@ -78,18 +101,27 @@ class HTMXValidator:
         if not field_info.is_required() and (value is None or value == ""):
             return ValidationResult(True)
 
-        # TypeAdapterを使用して個別フィールドをバリデート
+        # モデル全体をバリデートして対象フィールドのエラーを抽出
+        # 他の必須フィールドにダミー値を設定
+        validation_data = {}
+        for name, info in self.model.model_fields.items():
+            if name in data and data[name] not in (None, ""):
+                validation_data[name] = data[name]
+            elif info.is_required():
+                validation_data[name] = self._get_dummy_value(info)
+
         try:
-            adapter = self._field_adapters[field_name]
-            adapter.validate_python(value)
+            self.model.model_validate(validation_data)
             return ValidationResult(True)
 
         except ValidationError as e:
-            # 最初のエラーを返す
-            errors = e.errors()
-            if errors:
-                return ValidationResult(False, self._translate_error(errors[0]))
-            return ValidationResult(False, "入力エラーです")
+            # 対象フィールドのエラーのみ抽出
+            for error in e.errors():
+                loc = error.get("loc", ())
+                if loc and str(loc[0]) == field_name:
+                    return ValidationResult(False, self._translate_error(error))
+
+            return ValidationResult(True)
 
     def validate_all(self, data: dict[str, Any]) -> dict[str, ValidationResult]:
         """全フィールドのバリデーション"""
